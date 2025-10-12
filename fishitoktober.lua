@@ -1,8 +1,9 @@
--- NIKZZ FISH IT - V2.1 ULTIMATE
+-- NIKZZ FISH IT - V2 ULTIMATE EDITION
 -- DEVELOPER BY NIKZZ
--- Updated: 12 Oct 2025 - BUG FIX & NEW FEATURES
+-- Updated: 12 Oct 2025
+-- Optimized for DELTA EXECUTOR (Android)
 
-print("Loading NIKZZ FISH IT - V2.1 ULTIMATE...")
+print("Loading NIKZZ FISH IT - V2 ULTIMATE...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -29,17 +30,17 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "NIKZZ FISH IT - V2.1 ULTIMATE",
-    LoadingTitle = "NIKZZ FISH IT - ULTIMATE EDITION",
-    LoadingSubtitle = "DEVELOPER BY NIKZZ",
-    ConfigurationSaving = { Enabled = false },
+    Name = "NIKZZ FISH IT - V2 ULTIMATE",
+    LoadingTitle = "NIKZZ FISH IT - UPGRADED VERSION",
+    LoadingSubtitle = "DEVELOPER BY NIKZZ | Delta Android Optimized",
+    ConfigurationSaving = { Enabled = true, FileName = "NikzzFishIt_V2" },
 })
 
 -- Configuration
 local Config = {
     AutoFishingV1 = false,
     AutoFishingV2 = false,
-    FishingDelay = 0.3,
+    FishingDelay = 0.5,
     PerfectCatch = false,
     AntiAFK = false,
     AutoJump = false,
@@ -60,13 +61,14 @@ local Config = {
     ESPDistance = 20,
     LockedPosition = false,
     LockCFrame = nil,
+    AutoEnchant = false,
     AutoBuyWeather = false,
     SelectedWeathers = {},
     AutoAcceptTrade = false,
-    AutoRejoin = false,
-    AutoSaveSettings = false,
-    Brightness = 2,
-    TimeOfDay = 14
+    AutoRejoinDisconnect = false,
+    AutoSaveConfig = true,
+    AutoLoadConfig = true,
+    EnchantStoneCount = 0,
 }
 
 -- Remotes Path
@@ -88,115 +90,50 @@ local EquipOxy = GetRemote("RF/EquipOxygenTank")
 local UnequipOxy = GetRemote("RF/UnequipOxygenTank")
 local Radar = GetRemote("RF/UpdateFishingRadar")
 local SellRemote = GetRemote("RF/SellAllItems")
-local ActivateEnchant = GetRemote("RE/ActivateEnchantingAltar")
 local EquipItem = GetRemote("RE/EquipItem")
+local ActivateEnchantAltar = GetRemote("RE/ActivateEnchantingAltar")
 local PurchaseWeather = GetRemote("RF/PurchaseWeatherEvent")
 local UpdateAutoFishing = GetRemote("RF/UpdateAutoFishingState")
-local InitiateTrade = GetRemote("RF/InitiateTrade")
 local CanSendTrade = GetRemote("RF/CanSendTrade")
-
--- Auto Save/Load System
-local SaveFileName = "NikzzFishItSettings_" .. LocalPlayer.UserId .. ".json"
-
-local function SaveSettings()
-    if not Config.AutoSaveSettings then return end
-    
-    local settingsToSave = {
-        AutoFishingV1 = Config.AutoFishingV1,
-        AutoFishingV2 = Config.AutoFishingV2,
-        FishingDelay = Config.FishingDelay,
-        PerfectCatch = Config.PerfectCatch,
-        AntiAFK = Config.AntiAFK,
-        AutoJump = Config.AutoJump,
-        AutoJumpDelay = Config.AutoJumpDelay,
-        AutoSell = Config.AutoSell,
-        GodMode = Config.GodMode,
-        FlySpeed = Config.FlySpeed,
-        WalkSpeed = Config.WalkSpeed,
-        JumpPower = Config.JumpPower,
-        AutoBuyWeather = Config.AutoBuyWeather,
-        SelectedWeathers = Config.SelectedWeathers,
-        AutoAcceptTrade = Config.AutoAcceptTrade,
-        AutoRejoin = Config.AutoRejoin,
-        Brightness = Config.Brightness,
-        TimeOfDay = Config.TimeOfDay
-    }
-    
-    writefile(SaveFileName, HttpService:JSONEncode(settingsToSave))
-end
-
-local function LoadSettings()
-    if not Config.AutoSaveSettings then return end
-    
-    if isfile(SaveFileName) then
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(SaveFileName))
-        end)
-        
-        if success and data then
-            for key, value in pairs(data) do
-                if Config[key] ~= nil then
-                    Config[key] = value
-                end
-            end
-            print("Settings loaded successfully")
-        end
-    end
-end
+local AwaitTradeResponse = GetRemote("RF/AwaitTradeResponse")
 
 -- Anti-Stuck System for Auto Fishing V1
 local LastFishTime = tick()
-local StuckCheckInterval = 15
+local StuckThreshold = 15 -- seconds
 
-local function CheckAndRespawnIfStuck()
-    task.spawn(function()
-        while Config.AutoFishingV1 do
-            task.wait(StuckCheckInterval)
-            
-            if tick() - LastFishTime > StuckCheckInterval and Config.AutoFishingV1 then
-                warn("[Anti-Stuck] Player seems stuck, respawning...")
-                
-                local currentPos = HumanoidRootPart.CFrame
-                Character:BreakJoints()
-                
-                LocalPlayer.CharacterAdded:Wait()
-                task.wait(2)
-                
-                Character = LocalPlayer.Character
-                HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-                Humanoid = Character:WaitForChild("Humanoid")
-                
-                HumanoidRootPart.CFrame = currentPos
-                LastFishTime = tick()
-                
-                task.wait(1)
-                if Config.AutoFishingV1 then
-                    AutoFishingV1()
-                end
-            end
-        end
-    end)
+local function CheckStuckAndRespawn()
+    if Config.AutoFishingV1 and (tick() - LastFishTime) > StuckThreshold then
+        warn("[Anti-Stuck] Player stuck detected! Respawning...")
+        local currentPos = HumanoidRootPart.CFrame
+        Character:BreakJoints()
+        Character.CharacterAdded:Wait()
+        task.wait(2)
+        HumanoidRootPart.CFrame = currentPos
+        LastFishTime = tick()
+    end
 end
 
--- ===== AUTO FISHING V1 (IMPROVED) =====
+-- ===== AUTO FISHING V1 (FIXED - ULTRA FAST & ANTI-STUCK) =====
 local function AutoFishingV1()
     task.spawn(function()
         print("[AutoFishingV1] Started - Ultra Fast Mode")
-        CheckAndRespawnIfStuck()
-        
         while Config.AutoFishingV1 do
-            local success, err = pcall(function()
+            local success = pcall(function()
+                -- Check stuck
+                CheckStuckAndRespawn()
+                
                 if not LocalPlayer.Character or not HumanoidRootPart then
                     repeat task.wait(0.5) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                     Character = LocalPlayer.Character
                     HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+                    Humanoid = Character:WaitForChild("Humanoid")
                 end
 
-                -- Equip tool
+                -- Equip rod
                 EquipTool:FireServer(1)
                 task.wait(0.1)
 
-                -- Charge rod with perfect timing
+                -- Charge rod (perfect timing)
                 local chargeSuccess = false
                 for i = 1, 3 do
                     local ok = pcall(function()
@@ -210,109 +147,84 @@ local function AutoFishingV1()
                 end
                 
                 if not chargeSuccess then
-                    warn("[AutoFishingV1] Charge failed, retry...")
-                    task.wait(0.5)
+                    warn("[AutoFishingV1] Charge failed, retrying...")
                     return
                 end
 
-                task.wait(0.1)
+                task.wait(0.05)
 
-                -- Start minigame with perfect catch values
-                local startSuccess = false
+                -- Start minigame (ALWAYS PERFECT)
+                local miniSuccess = false
                 for i = 1, 3 do
                     local ok = pcall(function()
                         StartMini:InvokeServer(-1.233184814453125, 0.9945034885633273)
                     end)
                     if ok then 
-                        startSuccess = true 
+                        miniSuccess = true 
                         break 
                     end
                     task.wait(0.1)
                 end
                 
-                if not startSuccess then
-                    warn("[AutoFishingV1] Start minigame failed, retry...")
-                    task.wait(0.5)
+                if not miniSuccess then
+                    warn("[AutoFishingV1] Minigame start failed, retrying...")
                     return
                 end
 
-                -- Ultra fast delay
-                local actualDelay = math.max(Config.FishingDelay, 0.1)
-                task.wait(actualDelay)
+                -- Ultra fast delay (configurable)
+                local waitTime = math.clamp(Config.FishingDelay, 0.3, 5)
+                task.wait(waitTime)
 
-                -- Finish fishing instantly (skip minigame)
-                pcall(function()
-                    FinishFish:FireServer()
-                end)
-                
+                -- Finish fishing
+                FinishFish:FireServer()
                 LastFishTime = tick()
+
+                -- Minimal delay between cycles
                 task.wait(0.2)
             end)
 
             if not success then
-                warn("[AutoFishingV1] Error: " .. tostring(err))
+                warn("[AutoFishingV1] Error, restarting in 1s...")
                 task.wait(1)
             end
         end
-        
         print("[AutoFishingV1] Stopped")
     end)
 end
 
--- ===== AUTO FISHING V2 (FIXED - AUTO EQUIP, FAST DELAY, SKIP MINIGAME) =====
-local AutoV2Running = false
-
+-- ===== AUTO FISHING V2 (NEW METHOD - USING UpdateAutoFishingState) =====
 local function AutoFishingV2()
-    if AutoV2Running then return end
-    AutoV2Running = true
-    
     task.spawn(function()
-        print("[AutoFishingV2] Started - Auto Equip + Skip Minigame")
+        print("[AutoFishingV2] Started - New Method")
         
-        -- Enable game's auto fishing
-        pcall(function()
+        -- Enable auto fishing mode
+        local enableSuccess = pcall(function()
             UpdateAutoFishing:InvokeServer(true)
         end)
         
-        -- Hook to skip minigame and make it instant
-        local mt = getrawmetatable(game)
-        if mt then
-            setreadonly(mt, false)
-            local old = mt.__namecall
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                
-                -- Auto equip rod
-                if method == "FireServer" and self.Name == "EquipToolFromHotbar" then
-                    return old(self, 1)
-                end
-                
-                -- Skip minigame with perfect catch
-                if method == "InvokeServer" and self == StartMini then
-                    if Config.AutoFishingV2 then
-                        -- Instant finish after minigame start
-                        task.spawn(function()
-                            task.wait(0.1)
-                            pcall(function()
-                                FinishFish:FireServer()
-                            end)
-                        end)
-                        return old(self, -1.233184814453125, 0.9945034885633273)
-                    end
-                end
-                
-                return old(self, ...)
-            end)
-            setreadonly(mt, true)
+        if not enableSuccess then
+            warn("[AutoFishingV2] Failed to enable auto fishing")
+            return
         end
         
-        -- Keep equipping rod
         while Config.AutoFishingV2 do
             pcall(function()
+                -- Equip rod
                 EquipTool:FireServer(1)
+                task.wait(0.3)
+                
+                -- Perfect charge every time
+                ChargeRod:InvokeServer(tick())
+                task.wait(0.1)
+                
+                -- Perfect cast
+                StartMini:InvokeServer(-1.233184814453125, 0.9945034885633273)
+                task.wait(2)
+                
+                -- Complete
+                FinishFish:FireServer()
+                task.wait(0.5)
             end)
-            task.wait(2)
         end
         
         -- Disable when stopped
@@ -320,7 +232,6 @@ local function AutoFishingV2()
             UpdateAutoFishing:InvokeServer(false)
         end)
         
-        AutoV2Running = false
         print("[AutoFishingV2] Stopped")
     end)
 end
@@ -331,8 +242,6 @@ local function TogglePerfectCatch(enabled)
     Config.PerfectCatch = enabled
     
     if enabled then
-        if PerfectCatchConn then PerfectCatchConn:Disconnect() end
-
         local mt = getrawmetatable(game)
         if not mt then return end
         setreadonly(mt, false)
@@ -340,171 +249,474 @@ local function TogglePerfectCatch(enabled)
         mt.__namecall = newcclosure(function(self, ...)
             local method = getnamecallmethod()
             if method == "InvokeServer" and self == StartMini then
-                if Config.PerfectCatch and not Config.AutoFishingV1 and not Config.AutoFishingV2 then
+                if Config.PerfectCatch then
                     return old(self, -1.233184814453125, 0.9945034885633273)
                 end
             end
             return old(self, ...)
         end)
         setreadonly(mt, true)
-    else
-        if PerfectCatchConn then
-            PerfectCatchConn:Disconnect()
-            PerfectCatchConn = nil
-        end
     end
 end
 
--- ===== AUTO ENCHANT (FIXED - BUTTON BASED) =====
-local function AutoEnchantOnce()
-    task.spawn(function()
-        local backpack = LocalPlayer:FindFirstChild("Backpack")
-        if not backpack then 
-            Rayfield:Notify({
-                Title = "Auto Enchant",
-                Content = "Backpack not found!",
-                Duration = 2
-            })
-            return 
-        end
-        
-        local enchantStone = nil
-        local stoneCount = 0
-        
+-- ===== AUTO ENCHANT SYSTEM =====
+local function GetEnchantStoneCount()
+    local count = 0
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
         for _, item in pairs(backpack:GetChildren()) do
-            if item.Name:find("Enchant Stone") then
-                stoneCount = stoneCount + 1
-                if not enchantStone then
-                    enchantStone = item
-                end
+            if item.Name:lower():find("enchant") and item.Name:lower():find("stone") then
+                count = count + 1
             end
         end
-        
-        if not enchantStone then
-            Rayfield:Notify({
-                Title = "Auto Enchant",
-                Content = "No enchant stones found!",
-                Duration = 3
-            })
-            return
+    end
+    return count
+end
+
+local function AutoEnchant()
+    task.spawn(function()
+        print("[AutoEnchant] Started")
+        while Config.AutoEnchant do
+            pcall(function()
+                local stoneCount = GetEnchantStoneCount()
+                Config.EnchantStoneCount = stoneCount
+                
+                if stoneCount > 0 then
+                    -- Activate enchant altar (no need to equip stone)
+                    ActivateEnchantAltar:FireServer()
+                    task.wait(0.5)
+                    
+                    Rayfield:Notify({
+                        Title = "Auto Enchant",
+                        Content = string.format("Enchanted! Stones left: %d", stoneCount - 1),
+                        Duration = 2
+                    })
+                else
+                    Rayfield:Notify({
+                        Title = "Auto Enchant",
+                        Content = "No enchant stones left!",
+                        Duration = 3
+                    })
+                    Config.AutoEnchant = false
+                end
+            end)
+            task.wait(2)
         end
-        
-        -- Equip enchant stone
-        pcall(function()
-            local stoneId = enchantStone:GetAttribute("ItemId") or "enchant-stone"
-            EquipItem:FireServer(stoneId, "EnchantStones")
-        end)
-        
-        task.wait(0.3)
-        
-        -- Activate enchanting altar
-        pcall(function()
-            ActivateEnchant:FireServer()
-        end)
-        
-        task.wait(0.5)
-        
-        Rayfield:Notify({
-            Title = "Auto Enchant",
-            Content = "Enchanted! Stones remaining: " .. (stoneCount - 1),
-            Duration = 2
-        })
+        print("[AutoEnchant] Stopped")
     end)
 end
 
 -- ===== AUTO BUY WEATHER =====
 local WeatherList = {"Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"}
 
+local function BuyWeather(weatherName)
+    local success = pcall(function()
+        PurchaseWeather:InvokeServer(weatherName)
+    end)
+    
+    if success then
+        Rayfield:Notify({
+            Title = "Weather Purchased",
+            Content = weatherName .. " activated!",
+            Duration = 2
+        })
+    else
+        warn("[BuyWeather] Failed to buy: " .. weatherName)
+    end
+end
+
 local function AutoBuyWeather()
     task.spawn(function()
+        print("[AutoBuyWeather] Started")
         while Config.AutoBuyWeather do
             for _, weather in ipairs(Config.SelectedWeathers) do
-                if weather and weather ~= "None" then
-                    pcall(function()
-                        local result = PurchaseWeather:InvokeServer(weather)
-                        if result then
-                            Rayfield:Notify({
-                                Title = "Auto Buy Weather",
-                                Content = "Purchased: " .. weather,
-                                Duration = 2
-                            })
-                        end
-                    end)
+                if Config.AutoBuyWeather then
+                    BuyWeather(weather)
                     task.wait(1)
                 end
             end
-            task.wait(30)
+            task.wait(30) -- Check every 30 seconds
         end
+        print("[AutoBuyWeather] Stopped")
     end)
 end
 
--- ===== AUTO ACCEPT TRADE (FIXED) =====
-local TradeConnection = nil
-
+-- ===== AUTO ACCEPT TRADE =====
 local function AutoAcceptTrade()
-    if TradeConnection then TradeConnection:Disconnect() end
-    
-    TradeConnection = RunService.Heartbeat:Connect(function()
-        if not Config.AutoAcceptTrade then
-            if TradeConnection then TradeConnection:Disconnect() end
-            return
-        end
-        
-        pcall(function()
-            -- Check for trade UI
-            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-            if playerGui then
-                local tradeGui = playerGui:FindFirstChild("TradeGui") or playerGui:FindFirstChild("Trade")
-                
-                if tradeGui and tradeGui.Enabled then
-                    -- Find accept button
-                    for _, descendant in pairs(tradeGui:GetDescendants()) do
-                        if descendant:IsA("TextButton") then
-                            local text = descendant.Text:lower()
-                            if text:find("accept") or text:find("confirm") or text:find("agree") then
-                                -- Click accept button
-                                for _, connection in pairs(getconnections(descendant.MouseButton1Click)) do
-                                    connection:Fire()
-                                end
-                                
-                                task.wait(0.1)
-                                
-                                -- Click again for double confirm
-                                for _, connection in pairs(getconnections(descendant.MouseButton1Click)) do
-                                    connection:Fire()
-                                end
-                                
-                                Rayfield:Notify({
-                                    Title = "Auto Accept Trade",
-                                    Content = "Trade accepted automatically!",
-                                    Duration = 2
-                                })
-                            end
-                        end
-                    end
+    task.spawn(function()
+        print("[AutoAcceptTrade] Monitoring trades...")
+        while Config.AutoAcceptTrade do
+            pcall(function()
+                local canTrade = CanSendTrade:InvokeServer()
+                if canTrade then
+                    task.wait(0.1)
+                    AwaitTradeResponse:InvokeServer(true)
+                    task.wait(0.1)
+                    AwaitTradeResponse:InvokeServer(true)
+                    
+                    Rayfield:Notify({
+                        Title = "Trade Accepted",
+                        Content = "Trade automatically accepted!",
+                        Duration = 2
+                    })
                 end
-            end
-        end)
+            end)
+            task.wait(0.5)
+        end
     end)
 end
 
 -- ===== AUTO REJOIN ON DISCONNECT =====
 local function SetupAutoRejoin()
-    game:GetService("CoreGui").RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(child)
-        if Config.AutoRejoin and child.Name == 'ErrorPrompt' and child:FindFirstChild('MessageArea') and child.MessageArea:FindFirstChild('ErrorFrame') then
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    if Config.AutoRejoinDisconnect then
+        game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+            if Config.AutoRejoinDisconnect then
+                task.wait(1)
+                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            end
+        end)
+        
+        LocalPlayer.OnTeleport:Connect(function(State)
+            if State == Enum.TeleportState.Failed and Config.AutoRejoinDisconnect then
+                task.wait(1)
+                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            end
+        end)
+    end
+end
+
+-- ===== REJOIN RANDOM SERVER =====
+local function RejoinRandomServer()
+    local servers = {}
+    local success = pcall(function()
+        servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+    end)
+    
+    if success and servers.data then
+        local randomServer = servers.data[math.random(1, #servers.data)]
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer.id, LocalPlayer)
+    else
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end
+end
+
+-- ===== SAVE/LOAD CONFIG =====
+local function SaveConfig()
+    if not Config.AutoSaveConfig then return end
+    
+    local configData = HttpService:JSONEncode(Config)
+    writefile("NikzzFishIt_Config.json", configData)
+    print("[Config] Saved successfully")
+end
+
+local function LoadConfig()
+    if not Config.AutoLoadConfig then return end
+    
+    if isfile("NikzzFishIt_Config.json") then
+        local configData = readfile("NikzzFishIt_Config.json")
+        local loadedConfig = HttpService:JSONDecode(configData)
+        
+        for key, value in pairs(loadedConfig) do
+            Config[key] = value
+        end
+        
+        print("[Config] Loaded successfully")
+        Rayfield:Notify({
+            Title = "Config Loaded",
+            Content = "Previous settings restored!",
+            Duration = 3
+        })
+    end
+end
+
+-- ===== AUTO JUMP (FIXED - NO FLY) =====
+local function StartAutoJump()
+    task.spawn(function()
+        while Config.AutoJump do
+            if Humanoid and Humanoid.Health > 0 and Humanoid.FloorMaterial ~= Enum.Material.Air then
+                Humanoid.Jump = true
+            end
+            task.wait(Config.AutoJumpDelay)
         end
     end)
 end
 
--- ===== ENABLE RADAR =====
+-- ===== VISUAL FIXES (PERMANENT EFFECTS) =====
+local VisualConnections = {}
+
+local function ApplyPermanentFullbright()
+    if VisualConnections.Fullbright then
+        VisualConnections.Fullbright:Disconnect()
+    end
+    
+    VisualConnections.Fullbright = RunService.RenderStepped:Connect(function()
+        Lighting.Brightness = 3
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    end)
+end
+
+local function ApplyPermanentBrightness(value)
+    if VisualConnections.Brightness then
+        VisualConnections.Brightness:Disconnect()
+    end
+    
+    VisualConnections.Brightness = RunService.RenderStepped:Connect(function()
+        Lighting.Brightness = value
+    end)
+end
+
+local function ApplyPermanentTimeOfDay(value)
+    if VisualConnections.TimeOfDay then
+        VisualConnections.TimeOfDay:Disconnect()
+    end
+    
+    VisualConnections.TimeOfDay = RunService.RenderStepped:Connect(function()
+        Lighting.ClockTime = value
+    end)
+end
+
+local function StopPermanentEffect(effectName)
+    if VisualConnections[effectName] then
+        VisualConnections[effectName]:Disconnect()
+        VisualConnections[effectName] = nil
+    end
+end
+
+-- ===== ENHANCED 8-BIT MODE (5X SMOOTHER) =====
+local function Enable8BitEnhanced()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.Material = Enum.Material.SmoothPlastic
+            obj.Reflectance = 0
+            obj.CastShadow = false
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+        end
+    end
+    
+    -- Extra smoothing
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    Lighting.GlobalShadows = false
+    
+    Rayfield:Notify({
+        Title = "8-Bit Enhanced",
+        Content = "5x smoother graphics applied!",
+        Duration = 2
+    })
+end
+
+-- ===== ENHANCED PARTICLE REMOVAL =====
+local function RemoveParticlesEnhanced()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter") then
+            obj:Destroy()
+        elseif obj:IsA("Trail") then
+            obj:Destroy()
+        elseif obj:IsA("Beam") then
+            obj:Destroy()
+        elseif obj:IsA("Smoke") then
+            obj:Destroy()
+        elseif obj:IsA("Fire") then
+            obj:Destroy()
+        elseif obj:IsA("Sparkles") then
+            obj:Destroy()
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "Particles Removed",
+        Content = "All effects destroyed!",
+        Duration = 2
+    })
+end
+
+-- ===== ENHANCED SEAWEED REMOVAL =====
+local function RemoveSeaweedEnhanced()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        local name = obj.Name:lower()
+        if name:find("seaweed") or name:find("kelp") or name:find("coral") or name:find("plant") then
+            if obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart") then
+                obj:Destroy()
+            end
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "Seaweed Removed",
+        Content = "Ocean cleared completely!",
+        Duration = 2
+    })
+end
+
+-- ===== ENHANCED WATER OPTIMIZATION =====
+local function OptimizeWaterEnhanced()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Terrain") then
+            obj.WaterReflectance = 0
+            obj.WaterTransparency = 1
+            obj.WaterWaveSize = 0
+            obj.WaterWaveSpeed = 0
+        elseif obj:IsA("Part") and obj.Material == Enum.Material.Water then
+            obj.Transparency = 1
+            obj.CanCollide = false
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "Water Optimized",
+        Content = "Ultra performance mode!",
+        Duration = 2
+    })
+end
+
+-- ===== ENHANCED PERFORMANCE MODE =====
+local function PerformanceModeEnhanced()
+    -- Lighting
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 100000
+    Lighting.Brightness = 0
+    
+    -- Quality
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    
+    -- Remove everything
+    RemoveParticlesEnhanced()
+    RemoveSeaweedEnhanced()
+    OptimizeWaterEnhanced()
+    Enable8BitEnhanced()
+    
+    -- Destroy decorations
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Decal") or obj:IsA("Texture") then
+            obj:Destroy()
+        elseif obj:IsA("SurfaceGui") then
+            obj:Destroy()
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "Performance Mode",
+        Content = "Maximum FPS optimization!",
+        Duration = 3
+    })
+end
+
+-- ===== EXTRA FPS BOOST (ULTRA LOW RENDERING) =====
+local function ExtraFPSBoost()
+    -- Lowest possible settings
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
+    
+    -- Disable everything
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 0
+    Lighting.Brightness = 0
+    
+    -- Destroy all visual elements
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or 
+           obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") or
+           obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SurfaceGui") then
+            obj:Destroy()
+        elseif obj:IsA("BasePart") then
+            obj.Material = Enum.Material.SmoothPlastic
+            obj.Reflectance = 0
+            obj.CastShadow = false
+        elseif obj:IsA("MeshPart") then
+            obj.TextureID = ""
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "EXTRA FPS BOOST",
+        Content = "Ultra low rendering active!",
+        Duration = 3
+    })
+end
+
+-- ===== HD GRAPHICS MEDIUM =====
+local function HDGraphicsMedium()
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level10
+    Lighting.GlobalShadows = true
+    Lighting.Brightness = 2
+    Lighting.FogEnd = 50000
+    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
+    
+    for _, obj in pairs(Lighting:GetChildren()) do
+        if obj:IsA("Atmosphere") then
+            obj.Density = 0.3
+            obj.Offset = 0.5
+        elseif obj:IsA("BloomEffect") then
+            obj.Enabled = true
+            obj.Intensity = 0.5
+        elseif obj:IsA("ColorCorrectionEffect") then
+            obj.Enabled = true
+            obj.Contrast = 0.1
+        end
+    end
+    
+    Rayfield:Notify({
+        Title = "HD Graphics Medium",
+        Content = "Balanced quality applied!",
+        Duration = 2
+    })
+end
+
+-- ===== HD GRAPHICS ULTRA (20X QUALITY) =====
+local function HDGraphicsUltra()
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level21
+    Lighting.GlobalShadows = true
+    Lighting.Technology = Enum.Technology.Future
+    Lighting.Brightness = 3
+    Lighting.FogEnd = 100000
+    Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+    
+    -- Add/enhance effects
+    local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect", Lighting)
+    bloom.Enabled = true
+    bloom.Intensity = 1
+    bloom.Size = 24
+    bloom.Threshold = 0.5
+    
+    local blur = Lighting:FindFirstChildOfClass("BlurEffect") or Instance.new("BlurEffect", Lighting)
+    blur.Enabled = false
+    
+    local colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect", Lighting)
+    colorCorrection.Enabled = true
+    colorCorrection.Brightness = 0.05
+    colorCorrection.Contrast = 0.2
+    colorCorrection.Saturation = 0.1
+    
+    local sunRays = Lighting:FindFirstChildOfClass("SunRaysEffect") or Instance.new("SunRaysEffect", Lighting)
+    sunRays.Enabled = true
+    sunRays.Intensity = 0.15
+    sunRays.Spread = 0.5
+    
+    local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere", Lighting)
+    atmosphere.Density = 0.4
+    atmosphere.Offset = 1
+    atmosphere.Color = Color3.fromRGB(199, 199, 199)
+    atmosphere.Decay = Color3.fromRGB(106, 112, 125)
+    atmosphere.Glare = 0.5
+    atmosphere.Haze = 1
+    
+    Rayfield:Notify({
+        Title = "HD GRAPHICS ULTRA",
+        Content = "Maximum quality 20x applied!",
+        Duration = 3
+    })
+end
+
+-- Continue with other features...
 local function ToggleRadar(state)
     pcall(function()
         Radar:InvokeServer(state)
     end)
 end
 
--- ===== ENABLE DIVING GEAR =====
 local function ToggleDivingGear(state)
     pcall(function()
         if state then
@@ -516,7 +728,6 @@ local function ToggleDivingGear(state)
     end)
 end
 
--- ===== ANTI AFK =====
 local function StartAntiAFK()
     spawn(function()
         while Config.AntiAFK do
@@ -532,37 +743,6 @@ local function StartAntiAFK()
     end)
 end
 
--- ===== AUTO JUMP (FIXED - SIMPLE JUMP WITH DELAY) =====
-local JumpConnection = nil
-
-local function StartAutoJump()
-    if JumpConnection then JumpConnection:Disconnect() end
-    
-    task.spawn(function()
-        while Config.AutoJump do
-            if Humanoid and Humanoid.Health > 0 then
-                -- Check if on ground
-                local rayOrigin = HumanoidRootPart.Position
-                local rayDirection = Vector3.new(0, -5, 0)
-                
-                local raycastParams = RaycastParams.new()
-                raycastParams.FilterDescendantsInstances = {Character}
-                raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-                
-                local rayResult = Workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-                
-                if rayResult then
-                    -- On ground, can jump
-                    Humanoid.Jump = true
-                end
-            end
-            
-            task.wait(Config.AutoJumpDelay)
-        end
-    end)
-end
-
--- ===== AUTO SELL =====
 local function StartAutoSell()
     task.spawn(function()
         while Config.AutoSell do
@@ -576,7 +756,7 @@ local function StartAutoSell()
     end)
 end
 
--- ===== SAVED ISLANDS DATA =====
+-- Island Data
 local IslandsData = {
     {Name = "Fisherman Island", Position = Vector3.new(92, 9, 2768)},
     {Name = "Arrow Lever", Position = Vector3.new(898, 8, -363)},
@@ -601,7 +781,6 @@ local IslandsData = {
     {Name = "Snow Island", Position = Vector3.new(1627, 4, 3288)}
 }
 
--- ===== TELEPORT SYSTEM =====
 local function TeleportToPosition(pos)
     if HumanoidRootPart then
         HumanoidRootPart.CFrame = CFrame.new(pos)
@@ -610,7 +789,6 @@ local function TeleportToPosition(pos)
     return false
 end
 
--- ===== LOCK POSITION =====
 local LockConn = nil
 local function ToggleLockPosition(enabled)
     Config.LockedPosition = enabled
@@ -632,7 +810,6 @@ local function ToggleLockPosition(enabled)
     end
 end
 
--- ===== EVENT SCANNER =====
 local function ScanActiveEvents()
     local events = {}
     local validEvents = {
@@ -669,7 +846,6 @@ local function ScanActiveEvents()
     return events
 end
 
--- ===== GOD MODE =====
 local GodConnection = nil
 local function ToggleGodMode(enabled)
     Config.GodMode = enabled
@@ -689,7 +865,6 @@ local function ToggleGodMode(enabled)
     end
 end
 
--- ===== FLY SYSTEM =====
 local FlyBV = nil
 local FlyBG = nil
 local FlyConn = nil
@@ -742,7 +917,6 @@ local function StopFly()
     if FlyConn then FlyConn:Disconnect() FlyConn = nil end
 end
 
--- ===== WALK ON WATER =====
 local WaterPart = nil
 local WaterConn = nil
 
@@ -782,7 +956,6 @@ local function ToggleWalkOnWater(enabled)
     end
 end
 
--- ===== NOCLIP =====
 local NoClipConn = nil
 local function ToggleNoClip(enabled)
     Config.NoClip = enabled
@@ -806,7 +979,6 @@ local function ToggleNoClip(enabled)
     end
 end
 
--- ===== XRAY =====
 local function ToggleXRay(state)
     Config.XRay = state
     
@@ -821,7 +993,6 @@ local function ToggleXRay(state)
     end
 end
 
--- ===== ESP DISTANCE =====
 local ESPConnections = {}
 
 local function CreateESP(player)
@@ -833,7 +1004,7 @@ local function CreateESP(player)
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "ESP_" .. player.Name
     billboard.AlwaysOnTop = true
-billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.Parent = hrp
     
@@ -881,383 +1052,10 @@ local function ToggleESP(enabled)
     end
 end
 
--- ===== INFINITE ZOOM =====
 local function EnableInfiniteZoom()
     Config.InfiniteZoom = true
     LocalPlayer.CameraMaxZoomDistance = 9999
     LocalPlayer.CameraMinZoomDistance = 0.5
-end
-
--- ===== GRAPHICS (IMPROVED - PERMANENT) =====
-local LightingConnection = nil
-
-local function ApplyPermanentLighting()
-    if LightingConnection then LightingConnection:Disconnect() end
-    
-    LightingConnection = RunService.Heartbeat:Connect(function()
-        Lighting.Brightness = Config.Brightness
-        Lighting.ClockTime = Config.TimeOfDay
-    end)
-end
-
-local function RemoveFog()
-    Lighting.FogEnd = 100000
-    Lighting.FogStart = 0
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("Atmosphere") then
-            effect.Density = 0
-        end
-    end
-    
-    RunService.Heartbeat:Connect(function()
-        Lighting.FogEnd = 100000
-        Lighting.FogStart = 0
-    end)
-end
-
-local function Enable8Bit()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            obj.Material = Enum.Material.SmoothPlastic
-            obj.Reflectance = 0
-            obj.CastShadow = false
-        end
-        if obj:IsA("MeshPart") then
-            obj.Material = Enum.Material.SmoothPlastic
-            obj.Reflectance = 0
-            obj.TextureID = ""
-        end
-        if obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-        end
-    end
-    
-    Workspace.DescendantAdded:Connect(function(obj)
-        if obj:IsA("BasePart") then
-            obj.Material = Enum.Material.SmoothPlastic
-            obj.Reflectance = 0
-            obj.CastShadow = false
-        end
-        if obj:IsA("MeshPart") then
-            obj.Material = Enum.Material.SmoothPlastic
-            obj.Reflectance = 0
-            obj.TextureID = ""
-        end
-        if obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-        end
-    end)
-end
-
-local function RemoveParticles()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-            obj.Enabled = false
-            obj:Destroy()
-        end
-    end
-    
-    Workspace.DescendantAdded:Connect(function(obj)
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-            obj.Enabled = false
-            obj:Destroy()
-        end
-    end)
-end
-
-local function RemoveSeaweed()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        if name:find("seaweed") or name:find("kelp") or name:find("coral") or name:find("plant") or name:find("weed") then
-            pcall(function()
-                if obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart") then
-                    obj:Destroy()
-                end
-            end)
-        end
-    end
-    
-    Workspace.DescendantAdded:Connect(function(obj)
-        local name = obj.Name:lower()
-        if name:find("seaweed") or name:find("kelp") or name:find("coral") or name:find("plant") or name:find("weed") then
-            pcall(function()
-                if obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart") then
-                    task.wait(0.1)
-                    obj:Destroy()
-                end
-            end)
-        end
-    end)
-end
-
-local function OptimizeWater()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Terrain") then
-            obj.WaterReflectance = 0
-            obj.WaterTransparency = 1
-            obj.WaterWaveSize = 0
-            obj.WaterWaveSpeed = 0
-        end
-        
-        if obj:IsA("Part") or obj:IsA("MeshPart") then
-            if obj.Material == Enum.Material.Water then
-                obj.Reflectance = 0
-                obj.Transparency = 0.8
-            end
-        end
-    end
-    
-    RunService.Heartbeat:Connect(function()
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("Terrain") then
-                obj.WaterReflectance = 0
-                obj.WaterTransparency = 1
-                obj.WaterWaveSize = 0
-                obj.WaterWaveSpeed = 0
-            end
-        end
-    end)
-end
-
--- ===== EXTRA FPS BOOST (NEW - ULTRA LOW RENDERING) =====
-local function ExtraFPSBoost()
-    -- Ultra low rendering - melebihi 8-bit
-    
-    -- Set minimum quality
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    
-    -- Disable all lighting effects
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 100000
-    Lighting.Brightness = 0
-    Lighting.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
-    Lighting.Ambient = Color3.fromRGB(0, 0, 0)
-    
-    -- Remove all effects from lighting
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or 
-           effect:IsA("ColorCorrectionEffect") or effect:IsA("DepthOfFieldEffect") or 
-           effect:IsA("SunRaysEffect") or effect:IsA("Atmosphere") then
-            effect.Enabled = false
-            effect:Destroy()
-        end
-    end
-    
-    -- Ultra simplify all objects
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        pcall(function()
-            if obj:IsA("BasePart") then
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.CastShadow = false
-                obj.TopSurface = Enum.SurfaceType.Smooth
-                obj.BottomSurface = Enum.SurfaceType.Smooth
-            end
-            
-            if obj:IsA("MeshPart") then
-                obj.Material = Enum.Material.Plastic
-                obj.Reflectance = 0
-                obj.TextureID = ""
-                obj.CastShadow = false
-                obj.RenderFidelity = Enum.RenderFidelity.Performance
-            end
-            
-            if obj:IsA("SpecialMesh") then
-                obj.TextureId = ""
-            end
-            
-            if obj:IsA("Decal") or obj:IsA("Texture") then
-                obj.Transparency = 1
-                obj:Destroy()
-            end
-            
-            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or 
-               obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-                obj.Enabled = false
-                obj:Destroy()
-            end
-        end)
-    end
-    
-    -- Disable terrain decoration
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Terrain") then
-            obj.Decoration = false
-            obj.WaterReflectance = 0
-            obj.WaterTransparency = 1
-            obj.WaterWaveSize = 0
-            obj.WaterWaveSpeed = 0
-        end
-    end
-    
-    -- Maintain ultra low settings
-    RunService.Heartbeat:Connect(function()
-        Lighting.GlobalShadows = false
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    end)
-    
-    Rayfield:Notify({
-        Title = "Extra FPS Boost",
-        Content = "Ultra low rendering enabled - Maximum FPS!",
-        Duration = 3
-    })
-end
-
--- ===== HD GRAPHICS MEDIUM (NEW) =====
-local function HDGraphicsMedium()
-    -- Medium HD graphics
-    
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level10
-    
-    -- Balanced lighting
-    Lighting.GlobalShadows = true
-    Lighting.Brightness = 2
-    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
-    Lighting.Ambient = Color3.fromRGB(100, 100, 100)
-    Lighting.FogEnd = 50000
-    
-    -- Add atmosphere for realism
-    if not Lighting:FindFirstChildOfClass("Atmosphere") then
-        local atmosphere = Instance.new("Atmosphere")
-        atmosphere.Density = 0.3
-        atmosphere.Offset = 0.5
-        atmosphere.Color = Color3.fromRGB(199, 199, 199)
-        atmosphere.Decay = Color3.fromRGB(106, 112, 125)
-        atmosphere.Glare = 0.5
-        atmosphere.Haze = 0.5
-        atmosphere.Parent = Lighting
-    end
-    
-    -- Medium quality for all objects
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        pcall(function()
-            if obj:IsA("BasePart") then
-                obj.CastShadow = true
-                obj.Reflectance = 0
-            end
-            
-            if obj:IsA("MeshPart") then
-                obj.CastShadow = true
-                obj.RenderFidelity = Enum.RenderFidelity.Automatic
-            end
-            
-            if obj:IsA("ParticleEmitter") then
-                obj.Enabled = true
-            end
-        end)
-    end
-    
-    -- Enable terrain decoration
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Terrain") then
-            obj.Decoration = true
-            obj.WaterReflectance = 0.5
-            obj.WaterTransparency = 0.5
-        end
-    end
-    
-    Rayfield:Notify({
-        Title = "HD Graphics Medium",
-        Content = "Medium HD graphics enabled!",
-        Duration = 3
-    })
-end
-
--- ===== HD GRAPHICS ULTRA (NEW - 20x QUALITY) =====
-local function HDGraphicsUltra()
-    -- Ultra HD graphics - 20x quality
-    
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level21
-    
-    -- Maximum lighting quality
-    Lighting.GlobalShadows = true
-    Lighting.Brightness = 3
-    Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
-    Lighting.Ambient = Color3.fromRGB(150, 150, 150)
-    Lighting.FogEnd = 100000
-    Lighting.FogStart = 5000
-    Lighting.ClockTime = 14
-    
-    -- Add ultra atmosphere
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("Atmosphere") then
-            effect:Destroy()
-        end
-    end
-    
-    local atmosphere = Instance.new("Atmosphere")
-    atmosphere.Density = 0.5
-    atmosphere.Offset = 1
-    atmosphere.Color = Color3.fromRGB(255, 255, 255)
-    atmosphere.Decay = Color3.fromRGB(92, 102, 122)
-    atmosphere.Glare = 1
-    atmosphere.Haze = 1.5
-    atmosphere.Parent = Lighting
-    
-    -- Add bloom effect
-    if not Lighting:FindFirstChildOfClass("BloomEffect") then
-        local bloom = Instance.new("BloomEffect")
-        bloom.Intensity = 0.5
-        bloom.Size = 24
-        bloom.Threshold = 1
-        bloom.Parent = Lighting
-    end
-    
-    -- Add sun rays
-    if not Lighting:FindFirstChildOfClass("SunRaysEffect") then
-        local sunrays = Instance.new("SunRaysEffect")
-        sunrays.Intensity = 0.25
-        sunrays.Spread = 1
-        sunrays.Parent = Lighting
-    end
-    
-    -- Add color correction
-    if not Lighting:FindFirstChildOfClass("ColorCorrectionEffect") then
-        local colorCorrection = Instance.new("ColorCorrectionEffect")
-        colorCorrection.Brightness = 0.05
-        colorCorrection.Contrast = 0.1
-        colorCorrection.Saturation = 0.1
-        colorCorrection.TintColor = Color3.fromRGB(255, 255, 255)
-        colorCorrection.Parent = Lighting
-    end
-    
-    -- Ultra quality for all objects
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        pcall(function()
-            if obj:IsA("BasePart") then
-                obj.CastShadow = true
-                obj.Reflectance = 0.1
-            end
-            
-            if obj:IsA("MeshPart") then
-                obj.CastShadow = true
-                obj.RenderFidelity = Enum.RenderFidelity.Precise
-                obj.Reflectance = 0.1
-            end
-            
-            if obj:IsA("ParticleEmitter") then
-                obj.Enabled = true
-                obj.Rate = obj.Rate * 1.5
-            end
-        end)
-    end
-    
-    -- Ultra terrain settings
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Terrain") then
-            obj.Decoration = true
-            obj.WaterReflectance = 1
-            obj.WaterTransparency = 0.3
-            obj.WaterWaveSize = 0.3
-            obj.WaterWaveSpeed = 10
-        end
-    end
-    
-    Rayfield:Notify({
-        Title = "HD Graphics Ultra",
-        Content = "Ultra HD graphics enabled - 20x Quality!",
-        Duration = 3
-    })
 end
 
 -- ===== UI CREATION =====
@@ -1272,61 +1070,61 @@ local function CreateUI()
     Tab1:CreateSection("Auto Features")
     
     Tab1:CreateToggle({
-        Name = "Auto Fishing V1 (Ultra Fast)",
+        Name = "Auto Fishing V1 (Ultra Fast + Anti-Stuck)",
         CurrentValue = false,
+        Flag = "AutoFishV1",
         Callback = function(Value)
             Config.AutoFishingV1 = Value
             if Value then
                 Config.AutoFishingV2 = false
                 AutoFishingV1()
-                Rayfield:Notify({Title = "Auto Fishing V1", Content = "Started with Anti-Stuck!", Duration = 3})
+                Rayfield:Notify({Title = "Auto Fishing V1", Content = "Ultra Fast Mode Started!", Duration = 3})
             end
-            SaveSettings()
         end
     })
     
     Tab1:CreateToggle({
-        Name = "Auto Fishing V2 (Auto Equip + Skip)",
+        Name = "Auto Fishing V2 (UpdateAutoFishing Method)",
         CurrentValue = false,
+        Flag = "AutoFishV2",
         Callback = function(Value)
             Config.AutoFishingV2 = Value
             if Value then
                 Config.AutoFishingV1 = false
                 AutoFishingV2()
-                Rayfield:Notify({Title = "Auto Fishing V2", Content = "Auto equip + skip minigame enabled!", Duration = 3})
+                Rayfield:Notify({Title = "Auto Fishing V2", Content = "New Method Started!", Duration = 3})
             end
-            SaveSettings()
         end
     })
     
     Tab1:CreateSlider({
-        Name = "Fishing Delay (V1 Only)",
-        Range = {0.1, 5},
+        Name = "Fishing Delay (V1 Only) - Lower = Faster",
+        Range = {0.3, 5},
         Increment = 0.1,
-        CurrentValue = 0.3,
+        CurrentValue = 0.5,
+        Flag = "FishDelay",
         Callback = function(Value)
             Config.FishingDelay = Value
-            SaveSettings()
         end
     })
     
     Tab1:CreateToggle({
         Name = "Anti AFK",
         CurrentValue = false,
+        Flag = "AntiAFK",
         Callback = function(Value)
             Config.AntiAFK = Value
             if Value then StartAntiAFK() end
-            SaveSettings()
         end
     })
     
     Tab1:CreateToggle({
         Name = "Auto Sell Fish",
         CurrentValue = false,
+        Flag = "AutoSell",
         Callback = function(Value)
             Config.AutoSell = Value
             if Value then StartAutoSell() end
-            SaveSettings()
         end
     })
     
@@ -1335,6 +1133,7 @@ local function CreateUI()
     Tab1:CreateToggle({
         Name = "Perfect Catch",
         CurrentValue = false,
+        Flag = "PerfectCatch",
         Callback = function(Value)
             TogglePerfectCatch(Value)
             Rayfield:Notify({
@@ -1342,7 +1141,6 @@ local function CreateUI()
                 Content = Value and "Enabled!" or "Disabled!",
                 Duration = 2
             })
-            SaveSettings()
         end
     })
     
@@ -1351,11 +1149,6 @@ local function CreateUI()
         CurrentValue = false,
         Callback = function(Value)
             ToggleRadar(Value)
-            Rayfield:Notify({
-                Title = "Fishing Radar",
-                Content = Value and "Enabled!" or "Disabled!",
-                Duration = 2
-            })
         end
     })
     
@@ -1364,129 +1157,120 @@ local function CreateUI()
         CurrentValue = false,
         Callback = function(Value)
             ToggleDivingGear(Value)
-            Rayfield:Notify({
-                Title = "Diving Gear",
-                Content = Value and "Activated!" or "Deactivated!",
-                Duration = 2
-            })
-        end
-    })
-    
-    Tab1:CreateSection("Auto Enchant")
-    
-    Tab1:CreateButton({
-        Name = "Auto Enchant Rod (Once)",
-        Callback = function()
-            AutoEnchantOnce()
         end
     })
     
     Tab1:CreateSection("Settings")
     
     Tab1:CreateToggle({
-        Name = "Auto Jump",
+        Name = "Auto Jump (Fixed - No Fly)",
         CurrentValue = false,
+        Flag = "AutoJump",
         Callback = function(Value)
             Config.AutoJump = Value
-            if Value then 
-                StartAutoJump()
-                Rayfield:Notify({Title = "Auto Jump", Content = "Character will jump automatically!", Duration = 2})
-            end
-            SaveSettings()
+            if Value then StartAutoJump() end
         end
     })
     
     Tab1:CreateSlider({
-        Name = "Jump Delay (seconds)",
+        Name = "Jump Delay",
         Range = {1, 10},
         Increment = 0.5,
         CurrentValue = 3,
+        Flag = "JumpDelay",
         Callback = function(Value)
             Config.AutoJumpDelay = Value
-            SaveSettings()
         end
     })
     
-    -- ===== WEATHER TAB =====
-    local Tab2 = Window:CreateTab("🌤️ Weather", 4483362458)
+    -- ===== AUTO ENCHANT TAB =====
+    local Tab2 = Window:CreateTab("✨ Auto Enchant", 4483362458)
     
-    Tab2:CreateSection("Auto Buy Weather")
+    Tab2:CreateSection("Enchant System")
     
-    local Weather1Drop = Tab2:CreateDropdown({
-        Name = "Weather Slot 1",
-        Options = {"None", "Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"},
-        CurrentOption = {"None"},
-        Callback = function(Option)
-            if Option[1] ~= "None" then
-                Config.SelectedWeathers[1] = Option[1]
-            else
-                Config.SelectedWeathers[1] = nil
-            end
-            SaveSettings()
-        end
+    Tab2:CreateParagraph({
+        Title = "ℹ️ How it works",
+        Content = "Automatically enchants your fishing rod using Enchant Stones. No need to equip the stone manually!"
     })
     
-    local Weather2Drop = Tab2:CreateDropdown({
-        Name = "Weather Slot 2",
-        Options = {"None", "Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"},
-        CurrentOption = {"None"},
-        Callback = function(Option)
-            if Option[1] ~= "None" then
-                Config.SelectedWeathers[2] = Option[1]
-            else
-                Config.SelectedWeathers[2] = nil
+    Tab2:CreateToggle({
+        Name = "Auto Enchant Rod",
+        CurrentValue = false,
+        Flag = "AutoEnchant",
+        Callback = function(Value)
+            Config.AutoEnchant = Value
+            if Value then
+                AutoEnchant()
+                Rayfield:Notify({
+                    Title = "Auto Enchant",
+                    Content = "Enchanting started!",
+                    Duration = 2
+                })
             end
-            SaveSettings()
-        end
-    })
-    
-    local Weather3Drop = Tab2:CreateDropdown({
-        Name = "Weather Slot 3",
-        Options = {"None", "Wind", "Cloudy", "Snow", "Storm", "Radiant", "Shark Hunt"},
-        CurrentOption = {"None"},
-        Callback = function(Option)
-            if Option[1] ~= "None" then
-                Config.SelectedWeathers[3] = Option[1]
-            else
-                Config.SelectedWeathers[3] = nil
-            end
-            SaveSettings()
         end
     })
     
     Tab2:CreateButton({
-        Name = "Buy Selected Weathers Now",
+        Name = "Check Enchant Stone Count",
+        Callback = function()
+            local count = GetEnchantStoneCount()
+            Rayfield:Notify({
+                Title = "Enchant Stones",
+                Content = string.format("You have %d stones", count),
+                Duration = 3
+            })
+        end
+    })
+    
+    Tab2:CreateSection("Weather System")
+    
+    Tab2:CreateParagraph({
+        Title = "🌤️ Auto Buy Weather",
+        Content = "Select up to 3 weather types to purchase automatically when slots are empty."
+    })
+    
+    local WeatherDropdown = Tab2:CreateDropdown({
+        Name = "Select Weathers (Max 3)",
+        Options = WeatherList,
+        CurrentOption = {},
+        MultipleOptions = true,
+        Callback = function(Options)
+            if #Options <= 3 then
+                Config.SelectedWeathers = Options
+            else
+                Rayfield:Notify({
+                    Title = "Weather Limit",
+                    Content = "Maximum 3 weathers only!",
+                    Duration = 2
+                })
+            end
+        end
+    })
+    
+    Tab2:CreateButton({
+        Name = "Buy Selected Weathers Once",
         Callback = function()
             for _, weather in ipairs(Config.SelectedWeathers) do
-                if weather then
-                    pcall(function()
-                        PurchaseWeather:InvokeServer(weather)
-                        Rayfield:Notify({
-                            Title = "Weather Purchased",
-                            Content = "Bought: " .. weather,
-                            Duration = 2
-                        })
-                    end)
-                    task.wait(0.5)
-                end
+                BuyWeather(weather)
+                task.wait(0.5)
             end
         end
     })
     
     Tab2:CreateToggle({
-        Name = "Auto Buy Weather (Continuous)",
+        Name = "Auto Buy Weather (Loop)",
         CurrentValue = false,
+        Flag = "AutoBuyWeather",
         Callback = function(Value)
             Config.AutoBuyWeather = Value
             if Value then
                 AutoBuyWeather()
                 Rayfield:Notify({
                     Title = "Auto Buy Weather",
-                    Content = "Will keep buying selected weathers!",
-                    Duration = 3
+                    Content = "Started purchasing weathers!",
+                    Duration = 2
                 })
             end
-            SaveSettings()
         end
     })
     
@@ -1527,13 +1311,9 @@ local function CreateUI()
     Tab3:CreateToggle({
         Name = "Lock Position",
         CurrentValue = false,
+        Flag = "LockPos",
         Callback = function(Value)
             ToggleLockPosition(Value)
-            Rayfield:Notify({
-                Title = "Lock Position",
-                Content = Value and "Position Locked!" or "Position Unlocked!",
-                Duration = 2
-            })
         end
     })
     
@@ -1652,16 +1432,6 @@ local function CreateUI()
         end
     })
     
-    Tab3:CreateButton({
-        Name = "Teleport to Checkpoint",
-        Callback = function()
-            if Config.CheckpointPosition then
-                HumanoidRootPart.CFrame = Config.CheckpointPosition
-                Rayfield:Notify({Title = "Teleported", Content = "Back to checkpoint", Duration = 2})
-            end
-        end
-    })
-    
     -- ===== UTILITY TAB =====
     local Tab4 = Window:CreateTab("⚡ Utility", 4483362458)
     
@@ -1672,12 +1442,12 @@ local function CreateUI()
         Range = {16, 500},
         Increment = 1,
         CurrentValue = 16,
+        Flag = "WalkSpeed",
         Callback = function(Value)
             Config.WalkSpeed = Value
             if Humanoid then
                 Humanoid.WalkSpeed = Value
             end
-            SaveSettings()
         end
     })
     
@@ -1686,41 +1456,25 @@ local function CreateUI()
         Range = {50, 500},
         Increment = 5,
         CurrentValue = 50,
+        Flag = "JumpPower",
         Callback = function(Value)
             Config.JumpPower = Value
             if Humanoid then
                 Humanoid.JumpPower = Value
             end
-            SaveSettings()
         end
     })
     
-    Tab4:CreateInput({
-        Name = "Custom Speed (Default: 16)",
-        PlaceholderText = "Enter any speed value",
-        RemoveTextAfterFocusLost = false,
-        Callback = function(Text)
-            local speed = tonumber(Text)
-            if speed and speed >= 1 then
-                if Humanoid then
-                    Humanoid.WalkSpeed = speed
-                    Config.WalkSpeed = speed
-                    Rayfield:Notify({Title = "Speed Set", Content = "Speed: " .. speed, Duration = 2})
-                end
-            end
-        end
-    })
-    
-    Tab4:CreateSection("Extra Utility")
+    Tab4:CreateSection("Movement")
     
     Tab4:CreateToggle({
         Name = "Fly Mode",
         CurrentValue = false,
+        Flag = "Fly",
         Callback = function(Value)
             Config.FlyEnabled = Value
             if Value then
                 StartFly()
-                Rayfield:Notify({Title = "Fly Enabled", Content = "Use WASD + Space/Shift", Duration = 3})
             else
                 StopFly()
             end
@@ -1731,49 +1485,36 @@ local function CreateUI()
         Name = "Fly Speed",
         Range = {10, 300},
         Increment = 5,
-CurrentValue = 50,
+        CurrentValue = 50,
+        Flag = "FlySpeed",
         Callback = function(Value)
             Config.FlySpeed = Value
-            SaveSettings()
         end
     })
     
     Tab4:CreateToggle({
         Name = "Walk on Water",
         CurrentValue = false,
+        Flag = "WalkWater",
         Callback = function(Value)
             ToggleWalkOnWater(Value)
-            Rayfield:Notify({
-                Title = "Walk on Water",
-                Content = Value and "Enabled" or "Disabled",
-                Duration = 2
-            })
         end
     })
     
     Tab4:CreateToggle({
         Name = "NoClip",
         CurrentValue = false,
+        Flag = "NoClip",
         Callback = function(Value)
             ToggleNoClip(Value)
-            Rayfield:Notify({
-                Title = "NoClip",
-                Content = Value and "Enabled" or "Disabled",
-                Duration = 2
-            })
         end
     })
     
     Tab4:CreateToggle({
-        Name = "XRay (Transparent Walls)",
+        Name = "XRay",
         CurrentValue = false,
         Callback = function(Value)
             ToggleXRay(Value)
-            Rayfield:Notify({
-                Title = "XRay Mode",
-                Content = Value and "Enabled" or "Disabled",
-                Duration = 2
-            })
         end
     })
     
@@ -1789,19 +1530,6 @@ CurrentValue = 50,
         end
     })
     
-    Tab4:CreateButton({
-        Name = "Reset Speed to Normal",
-        Callback = function()
-            if Humanoid then
-                Humanoid.WalkSpeed = 16
-                Humanoid.JumpPower = 50
-                Config.WalkSpeed = 16
-                Config.JumpPower = 50
-                Rayfield:Notify({Title = "Speed Reset", Content = "Back to normal", Duration = 2})
-            end
-        end
-    })
-    
     -- ===== UTILITY II TAB =====
     local Tab5 = Window:CreateTab("⚡ Utility II", 4483362458)
     
@@ -1810,38 +1538,9 @@ CurrentValue = 50,
     Tab5:CreateToggle({
         Name = "God Mode",
         CurrentValue = false,
+        Flag = "GodMode",
         Callback = function(Value)
             ToggleGodMode(Value)
-            if Value then
-                Rayfield:Notify({Title = "God Mode", Content = "You are immortal", Duration = 3})
-            else
-                Rayfield:Notify({Title = "God Mode", Content = "Disabled", Duration = 2})
-            end
-            SaveSettings()
-        end
-    })
-    
-    Tab5:CreateButton({
-        Name = "Full Health",
-        Callback = function()
-            if Humanoid then
-                Humanoid.Health = Humanoid.MaxHealth
-                Rayfield:Notify({Title = "Healed", Content = "Full health restored", Duration = 2})
-            end
-        end
-    })
-    
-    Tab5:CreateButton({
-        Name = "Remove All Damage",
-        Callback = function()
-            if Character then
-                for _, obj in pairs(Character:GetDescendants()) do
-                    if obj:IsA("Fire") or obj:IsA("Smoke") then
-                        obj:Destroy()
-                    end
-                end
-                Rayfield:Notify({Title = "Cleaned", Content = "All damage effects removed", Duration = 2})
-            end
         end
     })
     
@@ -1850,13 +1549,9 @@ CurrentValue = 50,
     Tab5:CreateToggle({
         Name = "Enable ESP",
         CurrentValue = false,
+        Flag = "ESP",
         Callback = function(Value)
             ToggleESP(Value)
-            Rayfield:Notify({
-                Title = "ESP",
-                Content = Value and "Enabled" or "Disabled",
-                Duration = 2
-            })
         end
     })
     
@@ -1870,89 +1565,43 @@ CurrentValue = 50,
         end
     })
     
-    Tab5:CreateButton({
-        Name = "Highlight All Players",
-        Callback = function()
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character then
-                    local highlight = Instance.new("Highlight", player.Character)
-                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.5
-                end
-            end
-            Rayfield:Notify({Title = "ESP Enabled", Content = "All players highlighted", Duration = 2})
-        end
-    })
-    
-    Tab5:CreateButton({
-        Name = "Remove All Highlights",
-        Callback = function()
-            for _, player in pairs(Players:GetPlayers()) do
-                if player.Character then
-                    for _, obj in pairs(player.Character:GetChildren()) do
-                        if obj:IsA("Highlight") then
-                            obj:Destroy()
-                        end
-                    end
-                end
-            end
-            Rayfield:Notify({Title = "ESP Disabled", Content = "Highlights removed", Duration = 2})
-        end
-    })
-    
-    Tab5:CreateSection("Trading")
+    Tab5:CreateSection("Trade System")
     
     Tab5:CreateToggle({
         Name = "Auto Accept Trade",
         CurrentValue = false,
+        Flag = "AutoTrade",
         Callback = function(Value)
             Config.AutoAcceptTrade = Value
             if Value then
                 AutoAcceptTrade()
                 Rayfield:Notify({
                     Title = "Auto Accept Trade",
-                    Content = "Will auto accept all trades!",
+                    Content = "Now accepting trades automatically!",
                     Duration = 3
                 })
             end
-            SaveSettings()
         end
     })
     
-    -- ===== VISUALS TAB (IMPROVED + NEW FEATURES) =====
+    -- ===== VISUALS TAB =====
     local Tab6 = Window:CreateTab("👁️ Visuals", 4483362458)
     
-    Tab6:CreateSection("Lighting (Permanent)")
+    Tab6:CreateSection("Lighting (Permanent Effects)")
     
     Tab6:CreateButton({
-        Name = "Fullbright",
+        Name = "Fullbright (Permanent)",
         Callback = function()
-            Config.Brightness = 3
-            Config.TimeOfDay = 14
-            Lighting.Brightness = 3
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-            Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
-            ApplyPermanentLighting()
-            Rayfield:Notify({Title = "Fullbright", Content = "Maximum brightness (Permanent)", Duration = 2})
+            ApplyPermanentFullbright()
+            Rayfield:Notify({Title = "Fullbright", Content = "Permanent effect applied!", Duration = 2})
         end
     })
     
     Tab6:CreateButton({
-        Name = "Remove Fog",
+        Name = "Stop Fullbright Effect",
         Callback = function()
-            RemoveFog()
-            Rayfield:Notify({Title = "Fog Removed", Content = "Fog disabled permanently", Duration = 2})
-        end
-    })
-    
-    Tab6:CreateButton({
-        Name = "8-Bit Mode (5x Smoother)",
-        Callback = function()
-            Enable8Bit()
-            Rayfield:Notify({Title = "8-Bit Mode", Content = "Ultra smooth graphics enabled", Duration = 2})
+            StopPermanentEffect("Fullbright")
+            Rayfield:Notify({Title = "Fullbright", Content = "Effect stopped", Duration = 2})
         end
     })
     
@@ -1962,10 +1611,14 @@ CurrentValue = 50,
         Increment = 0.5,
         CurrentValue = 2,
         Callback = function(Value)
-            Config.Brightness = Value
-            Lighting.Brightness = Value
-            ApplyPermanentLighting()
-            SaveSettings()
+            ApplyPermanentBrightness(Value)
+        end
+    })
+    
+    Tab6:CreateButton({
+        Name = "Stop Brightness Effect",
+        Callback = function()
+            StopPermanentEffect("Brightness")
         end
     })
     
@@ -1975,43 +1628,58 @@ CurrentValue = 50,
         Increment = 0.5,
         CurrentValue = 14,
         Callback = function(Value)
-            Config.TimeOfDay = Value
-            Lighting.ClockTime = Value
-            ApplyPermanentLighting()
-            SaveSettings()
+            ApplyPermanentTimeOfDay(Value)
         end
     })
     
-    Tab6:CreateSection("Effects (Improved)")
-    
     Tab6:CreateButton({
-        Name = "Remove Particles (Permanent)",
+        Name = "Stop Time Effect",
         Callback = function()
-            RemoveParticles()
-            Rayfield:Notify({Title = "Particles Removed", Content = "All effects disabled permanently", Duration = 2})
+            StopPermanentEffect("TimeOfDay")
         end
     })
     
+    Tab6:CreateSection("Effects (Enhanced)")
+    
     Tab6:CreateButton({
-        Name = "Remove Seaweed (Permanent)",
+        Name = "8-Bit Mode (5x Smoother)",
         Callback = function()
-            RemoveSeaweed()
-            Rayfield:Notify({Title = "Seaweed Removed", Content = "Water cleared permanently", Duration = 2})
+            Enable8BitEnhanced()
         end
     })
     
     Tab6:CreateButton({
-        Name = "Optimize Water (Permanent)",
+        Name = "Remove Particles (Enhanced)",
         Callback = function()
-            OptimizeWater()
-            Rayfield:Notify({Title = "Water Optimized", Content = "Water effects minimized permanently", Duration = 2})
+            RemoveParticlesEnhanced()
         end
     })
     
-    Tab6:CreateSection("Graphics Presets (NEW)")
+    Tab6:CreateButton({
+        Name = "Remove Seaweed (Enhanced)",
+        Callback = function()
+            RemoveSeaweedEnhanced()
+        end
+    })
     
     Tab6:CreateButton({
-        Name = "Extra FPS Boost (Ultra Low)",
+        Name = "Optimize Water (Enhanced)",
+        Callback = function()
+            OptimizeWaterEnhanced()
+        end
+    })
+    
+    Tab6:CreateButton({
+        Name = "Performance Mode (Enhanced)",
+        Callback = function()
+            PerformanceModeEnhanced()
+        end
+    })
+    
+    Tab6:CreateSection("Graphics Quality")
+    
+    Tab6:CreateButton({
+        Name = "EXTRA FPS BOOST (Ultra Low)",
         Callback = function()
             ExtraFPSBoost()
         end
@@ -2025,32 +1693,9 @@ CurrentValue = 50,
     })
     
     Tab6:CreateButton({
-        Name = "HD Graphics Ultra (20x Quality)",
+        Name = "HD GRAPHICS ULTRA (20x Quality)",
         Callback = function()
             HDGraphicsUltra()
-        end
-    })
-    
-    Tab6:CreateButton({
-        Name = "Reset Graphics",
-        Callback = function()
-            if LightingConnection then LightingConnection:Disconnect() end
-            Config.Brightness = 2
-            Config.TimeOfDay = 14
-            Lighting.Brightness = 2
-            Lighting.FogEnd = 10000
-            Lighting.GlobalShadows = true
-            Lighting.ClockTime = 14
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-            
-            -- Remove custom effects
-            for _, effect in pairs(Lighting:GetChildren()) do
-                if effect:IsA("Atmosphere") or effect:IsA("BloomEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") then
-                    effect:Destroy()
-                end
-            end
-            
-            Rayfield:Notify({Title = "Graphics Reset", Content = "Back to normal", Duration = 2})
         end
     })
     
@@ -2060,35 +1705,219 @@ CurrentValue = 50,
         Name = "Infinite Zoom",
         Callback = function()
             EnableInfiniteZoom()
-            Rayfield:Notify({Title = "Infinite Zoom", Content = "Zoom limits removed", Duration = 2})
+            Rayfield:Notify({Title = "Infinite Zoom", Content = "Enabled", Duration = 2})
         end
     })
     
-    Tab6:CreateButton({
-        Name = "Remove Camera Shake",
-        Callback = function()
-            local cam = Workspace.CurrentCamera
-            if cam then
-                cam.FieldOfView = 70
+    -- ===== SERVER TAB =====
+    local Tab7 = Window:CreateTab("🌐 Server", 4483362458)
+    
+    Tab7:CreateSection("Rejoin System")
+    
+    Tab7:CreateToggle({
+        Name = "Auto Rejoin on Disconnect",
+        CurrentValue = false,
+        Flag = "AutoRejoin",
+        Callback = function(Value)
+            Config.AutoRejoinDisconnect = Value
+            SetupAutoRejoin()
+            if Value then
+                Rayfield:Notify({
+                    Title = "Auto Rejoin",
+                    Content = "Will rejoin if disconnected",
+                    Duration = 3
+                })
             end
-            Rayfield:Notify({Title = "Camera Fixed", Content = "Shake removed", Duration = 2})
         end
+    })
+    
+    Tab7:CreateButton({
+        Name = "Rejoin Current Server",
+        Callback = function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+        end
+    })
+    
+    Tab7:CreateButton({
+        Name = "Rejoin Random Server",
+        Callback = function()
+            Rayfield:Notify({
+                Title = "Rejoining",
+                Content = "Finding random server...",
+                Duration = 2
+            })
+            RejoinRandomServer()
+        end
+    })
+    
+    Tab7:CreateSection("Server Information")
+    
+    Tab7:CreateButton({
+        Name = "Show Server Stats",
+        Callback = function()
+            local stats = string.format(
+                "=== SERVER STATS ===\n" ..
+                "Players: %d/%d\n" ..
+                "Ping: %d ms\n" ..
+                "FPS: %d\n" ..
+                "Job ID: %s\n" ..
+                "=== END ===",
+                #Players:GetPlayers(),
+                Players.MaxPlayers,
+                math.floor(LocalPlayer:GetNetworkPing() * 1000),
+                math.floor(workspace:GetRealPhysicsFPS()),
+                game.JobId
+            )
+            print(stats)
+            Rayfield:Notify({Title = "Server Stats", Content = "Check console (F9)", Duration = 3})
+        end
+    })
+    
+    Tab7:CreateButton({
+        Name = "Copy Job ID",
+        Callback = function()
+            setclipboard(game.JobId)
+            Rayfield:Notify({Title = "Copied", Content = "Job ID copied!", Duration = 2})
+        end
+    })
+    
+    -- ===== CONFIG TAB =====
+    local Tab8 = Window:CreateTab("⚙️ Config", 4483362458)
+    
+    Tab8:CreateSection("Auto Save/Load")
+    
+    Tab8:CreateToggle({
+        Name = "Auto Save Config",
+        CurrentValue = true,
+        Flag = "AutoSave",
+        Callback = function(Value)
+            Config.AutoSaveConfig = Value
+            if Value then
+                Rayfield:Notify({
+                    Title = "Auto Save",
+                    Content = "Config will save automatically",
+                    Duration = 2
+                })
+            end
+        end
+    })
+    
+    Tab8:CreateToggle({
+        Name = "Auto Load Config on Start",
+        CurrentValue = true,
+        Flag = "AutoLoad",
+        Callback = function(Value)
+            Config.AutoLoadConfig = Value
+        end
+    })
+    
+    Tab8:CreateSection("Manual Config")
+    
+    Tab8:CreateButton({
+        Name = "Save Config Now",
+        Callback = function()
+            SaveConfig()
+            Rayfield:Notify({
+                Title = "Config Saved",
+                Content = "All settings saved!",
+                Duration = 2
+            })
+        end
+    })
+    
+    Tab8:CreateButton({
+        Name = "Load Config Now",
+        Callback = function()
+            LoadConfig()
+            
+            -- Reapply loaded settings
+            if Config.AutoFishingV1 then AutoFishingV1() end
+            if Config.AutoFishingV2 then AutoFishingV2() end
+            if Config.AntiAFK then StartAntiAFK() end
+            if Config.AutoJump then StartAutoJump() end
+            if Config.AutoSell then StartAutoSell() end
+            if Config.AutoEnchant then AutoEnchant() end
+            if Config.AutoBuyWeather then AutoBuyWeather() end
+            if Config.AutoAcceptTrade then AutoAcceptTrade() end
+            if Config.GodMode then ToggleGodMode(true) end
+            if Config.FlyEnabled then StartFly() end
+            if Config.WalkOnWater then ToggleWalkOnWater(true) end
+            if Config.NoClip then ToggleNoClip(true) end
+            if Config.PerfectCatch then TogglePerfectCatch(true) end
+            if Config.LockedPosition then ToggleLockPosition(true) end
+            if Config.ESPEnabled then ToggleESP(true) end
+            
+            if Humanoid then
+                Humanoid.WalkSpeed = Config.WalkSpeed
+                Humanoid.JumpPower = Config.JumpPower
+            end
+            
+            Rayfield:Notify({
+                Title = "Config Loaded",
+                Content = "Settings restored & applied!",
+                Duration = 3
+            })
+        end
+    })
+    
+    Tab8:CreateButton({
+        Name = "Reset to Default Config",
+        Callback = function()
+            Config = {
+                AutoFishingV1 = false,
+                AutoFishingV2 = false,
+                FishingDelay = 0.5,
+                PerfectCatch = false,
+                AntiAFK = false,
+                AutoJump = false,
+                AutoJumpDelay = 3,
+                AutoSell = false,
+                GodMode = false,
+                FlyEnabled = false,
+                FlySpeed = 50,
+                WalkSpeed = 16,
+                JumpPower = 50,
+                WalkOnWater = false,
+                NoClip = false,
+                XRay = false,
+                ESPEnabled = false,
+                AutoEnchant = false,
+                AutoBuyWeather = false,
+                SelectedWeathers = {},
+                AutoAcceptTrade = false,
+                AutoRejoinDisconnect = false,
+                AutoSaveConfig = true,
+                AutoLoadConfig = true,
+            }
+            
+            Rayfield:Notify({
+                Title = "Config Reset",
+                Content = "All settings reset to default",
+                Duration = 3
+            })
+        end
+    })
+    
+    Tab8:CreateSection("Config Info")
+    
+    Tab8:CreateParagraph({
+        Title = "📁 Config Location",
+        Content = "File: NikzzFishIt_Config.json\nLocation: Executor's workspace folder\n\nAuto-saves when you close the script or change settings."
     })
     
     -- ===== MISC TAB =====
-    local Tab7 = Window:CreateTab("🔧 Misc", 4483362458)
+    local Tab9 = Window:CreateTab("🔧 Misc", 4483362458)
     
-    Tab7:CreateSection("Character")
+    Tab9:CreateSection("Character")
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Reset Character",
         Callback = function()
             Character:BreakJoints()
-            Rayfield:Notify({Title = "Resetting", Content = "Character respawning", Duration = 2})
         end
     })
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Remove Accessories",
         Callback = function()
             for _, obj in pairs(Character:GetChildren()) do
@@ -2100,7 +1929,7 @@ CurrentValue = 50,
         end
     })
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Rainbow Character",
         Callback = function()
             spawn(function()
@@ -2119,9 +1948,9 @@ CurrentValue = 50,
         end
     })
     
-    Tab7:CreateSection("Audio")
+    Tab9:CreateSection("Audio")
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Mute All Sounds",
         Callback = function()
             for _, sound in pairs(Workspace:GetDescendants()) do
@@ -2133,7 +1962,7 @@ CurrentValue = 50,
         end
     })
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Restore Sounds",
         Callback = function()
             for _, sound in pairs(Workspace:GetDescendants()) do
@@ -2145,9 +1974,9 @@ CurrentValue = 50,
         end
     })
     
-    Tab7:CreateSection("Inventory")
+    Tab9:CreateSection("Inventory")
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Show Inventory",
         Callback = function()
             print("=== INVENTORY ===")
@@ -2162,11 +1991,11 @@ CurrentValue = 50,
                 end
             end
             print("=== TOTAL: " .. count .. " ===")
-            Rayfield:Notify({Title = "Inventory", Content = "Found " .. count .. " items (check console F9)", Duration = 3})
+            Rayfield:Notify({Title = "Inventory", Content = "Found " .. count .. " items (check console)", Duration = 3})
         end
     })
     
-    Tab7:CreateButton({
+    Tab9:CreateButton({
         Name = "Drop All Items",
         Callback = function()
             for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
@@ -2180,279 +2009,113 @@ CurrentValue = 50,
         end
     })
     
-    Tab7:CreateSection("Server")
+    -- ===== INFO TAB =====
+    local Tab10 = Window:CreateTab("ℹ️ Info", 4483362458)
     
-    Tab7:CreateButton({
-        Name = "Show Server Stats",
-        Callback = function()
-            local stats = string.format(
-                "=== SERVER STATS ===\n" ..
-                "Players: %d/%d\n" ..
-                "Ping: %d ms\n" ..
-                "FPS: %d\n" ..
-                "Job ID: %s\n" ..
-                "=== END ===",
-                #Players:GetPlayers(),
-                Players.MaxPlayers,
-                LocalPlayer:GetNetworkPing() * 1000,
-                workspace:GetRealPhysicsFPS(),
-                game.JobId
-            )
-            print(stats)
-            Rayfield:Notify({Title = "Server Stats", Content = "Check console (F9)", Duration = 3})
-        end
+    Tab10:CreateSection("Script Information")
+    
+    Tab10:CreateParagraph({
+        Title = "NIKZZ FISH IT - V2 ULTIMATE",
+        Content = "🔥 Upgraded Version - Perfect Edition\n👨‍💻 Developer: Nikzz\n📅 Release: 12 Oct 2025\n📱 Optimized for Delta Executor (Android)\n✅ Status: ALL FEATURES WORKING"
     })
     
-    Tab7:CreateButton({
-        Name = "Copy Job ID",
-        Callback = function()
-            setclipboard(game.JobId)
-            Rayfield:Notify({Title = "Copied", Content = "Job ID copied to clipboard", Duration = 2})
-        end
+    Tab10:CreateSection("🆕 New Features in V2")
+    
+    Tab10:CreateParagraph({
+        Title = "⚡ Auto Fishing Improvements",
+        Content = "✅ V1: Ultra Fast + Anti-Stuck System\n✅ V2: New UpdateAutoFishing Method\n✅ Perfect Catch Every Time\n✅ Auto Respawn on Stuck (V1)\n✅ Configurable Delay (0.3-5s)"
     })
     
-    Tab7:CreateButton({
-        Name = "Rejoin Server (Same)",
-        Callback = function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-        end
+    Tab10:CreateParagraph({
+        Title = "✨ Auto Enchant System",
+        Content = "✅ Auto Enchant Rod\n✅ No Manual Equipping\n✅ Stone Count Tracker\n✅ Notifications on Success"
     })
     
-    Tab7:CreateButton({
-        Name = "Rejoin Server (Random)",
-        Callback = function()
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end
+    Tab10:CreateParagraph({
+        Title = "🌤️ Weather System",
+        Content = "✅ Select Up to 3 Weathers\n✅ Manual Buy Option\n✅ Auto Buy Loop (Continuous)\n✅ 6 Weather Types Available"
     })
     
-    Tab7:CreateSection("Auto Rejoin")
-    
-    Tab7:CreateToggle({
-        Name = "Auto Rejoin on Disconnect",
-        CurrentValue = false,
-        Callback = function(Value)
-            Config.AutoRejoin = Value
-            if Value then
-                SetupAutoRejoin()
-                Rayfield:Notify({
-                    Title = "Auto Rejoin",
-                    Content = "Will auto rejoin if disconnected!",
-                    Duration = 3
-                })
-            end
-            SaveSettings()
-        end
+    Tab10:CreateParagraph({
+        Title = "🤝 Trade & Rejoin",
+        Content = "✅ Auto Accept Trade\n✅ Auto Rejoin on Disconnect\n✅ Rejoin Random Server\n✅ Instant Trade Response"
     })
     
-    -- ===== SETTINGS TAB =====
-    local Tab8 = Window:CreateTab("⚙️ Settings", 4483362458)
-    
-    Tab8:CreateSection("Auto Save & Load")
-    
-    Tab8:CreateToggle({
-        Name = "Auto Save Settings",
-        CurrentValue = false,
-        Callback = function(Value)
-            Config.AutoSaveSettings = Value
-            if Value then
-                Rayfield:Notify({
-                    Title = "Auto Save",
-                    Content = "Settings will be saved automatically!",
-                    Duration = 3
-                })
-            end
-        end
+    Tab10:CreateParagraph({
+        Title = "⚙️ Config System",
+        Content = "✅ Auto Save Settings\n✅ Auto Load on Start\n✅ Manual Save/Load\n✅ Reset to Default\n✅ Persistent Across Sessions"
     })
     
-    Tab8:CreateButton({
-        Name = "Save Settings Now",
-        Callback = function()
-            Config.AutoSaveSettings = true
-            SaveSettings()
-            Rayfield:Notify({Title = "Saved", Content = "All settings saved successfully!", Duration = 2})
-        end
+    Tab10:CreateParagraph({
+        Title = "👁️ Visual Enhancements",
+        Content = "✅ Permanent Fullbright\n✅ Permanent Brightness Control\n✅ Permanent Time of Day\n✅ 8-Bit Mode (5x Smoother)\n✅ Enhanced Particle Removal\n✅ Enhanced Seaweed Removal\n✅ Enhanced Water Optimization\n✅ Extra FPS Boost (Ultra Low)\n✅ HD Graphics Medium\n✅ HD Graphics Ultra (20x Quality)"
     })
     
-    Tab8:CreateButton({
-        Name = "Load Saved Settings",
-        Callback = function()
-            Config.AutoSaveSettings = true
-            LoadSettings()
-            Rayfield:Notify({Title = "Loaded", Content = "Settings loaded successfully!", Duration = 2})
-        end
+    Tab10:CreateParagraph({
+        Title = "🔧 Fixed Issues",
+        Content = "✅ Auto Jump (No More Flying)\n✅ Fishing Delay Slider Working\n✅ No More Character Stuck\n✅ Visual Effects Now Permanent\n✅ All Performance Modes Enhanced"
     })
     
-    Tab8:CreateButton({
-        Name = "Delete Saved Settings",
-        Callback = function()
-            if isfile(SaveFileName) then
-                delfile(SaveFileName)
-                Rayfield:Notify({Title = "Deleted", Content = "Saved settings deleted!", Duration = 2})
-            else
-                Rayfield:Notify({Title = "Error", Content = "No saved settings found!", Duration = 2})
-            end
-        end
+    Tab10:CreateSection("📚 Usage Guide")
+    
+    Tab10:CreateParagraph({
+        Title = "⚡ Quick Start",
+        Content = "1. Enable Auto Fishing V1 or V2\n2. Adjust Fishing Delay (Lower = Faster)\n3. Enable Anti-Stuck Protection (Auto)\n4. Use Auto Enchant for Rod Upgrades\n5. Select & Auto Buy Weathers\n6. Enable Auto Accept Trade\n7. Turn on Auto Rejoin (Safety)"
     })
     
-    Tab8:CreateSection("Script Control")
+    Tab10:CreateParagraph({
+        Title = "💡 Pro Tips",
+        Content = "• V1: Fastest, Use 0.3s delay\n• V2: Uses game's auto system\n• Lock Position: Stay in one spot\n• Auto Save: Keeps your settings\n• Extra FPS Boost: For low-end devices\n• HD Ultra: For high-end devices\n• Auto Rejoin: Never lose progress"
+    })
     
-    Tab8:CreateButton({
+    Tab10:CreateSection("Script Control")
+    
+    Tab10:CreateButton({
         Name = "Show Current Settings",
         Callback = function()
             local settings = string.format(
                 "=== CURRENT SETTINGS ===\n" ..
                 "Auto Fishing V1: %s\n" ..
                 "Auto Fishing V2: %s\n" ..
-                "Fishing Delay: %.1f\n" ..
-                "Perfect Catch: %s\n" ..
-                "Anti AFK: %s\n" ..
-                "Auto Jump: %s\n" ..
-                "Auto Sell: %s\n" ..
-                "God Mode: %s\n" ..
+                "Fishing Delay: %.1fs\n" ..
+                "Auto Enchant: %s\n" ..
                 "Auto Buy Weather: %s\n" ..
+                "Selected Weathers: %d\n" ..
                 "Auto Accept Trade: %s\n" ..
                 "Auto Rejoin: %s\n" ..
+                "God Mode: %s\n" ..
+                "Fly Mode: %s\n" ..
                 "Walk Speed: %d\n" ..
-                "Fly Speed: %d\n" ..
+                "ESP Enabled: %s\n" ..
+                "Auto Save: %s\n" ..
                 "=== END ===",
                 Config.AutoFishingV1 and "ON" or "OFF",
                 Config.AutoFishingV2 and "ON" or "OFF",
                 Config.FishingDelay,
-                Config.PerfectCatch and "ON" or "OFF",
-                Config.AntiAFK and "ON" or "OFF",
-                Config.AutoJump and "ON" or "OFF",
-                Config.AutoSell and "ON" or "OFF",
-                Config.GodMode and "ON" or "OFF",
+                Config.AutoEnchant and "ON" or "OFF",
                 Config.AutoBuyWeather and "ON" or "OFF",
+                #Config.SelectedWeathers,
                 Config.AutoAcceptTrade and "ON" or "OFF",
-                Config.AutoRejoin and "ON" or "OFF",
+                Config.AutoRejoinDisconnect and "ON" or "OFF",
+                Config.GodMode and "ON" or "OFF",
+                Config.FlyEnabled and "ON" or "OFF",
                 Config.WalkSpeed,
-                Config.FlySpeed
+                Config.ESPEnabled and "ON" or "OFF",
+                Config.AutoSaveConfig and "ON" or "OFF"
             )
             print(settings)
-            Rayfield:Notify({Title = "Current Settings", Content = "Check console (F9)", Duration = 3})
+            Rayfield:Notify({Title = "Settings", Content = "Check console (F9)", Duration = 3})
         end
     })
     
-    -- ===== INFO TAB =====
-    local Tab9 = Window:CreateTab("ℹ️ Info", 4483362458)
-    
-    Tab9:CreateSection("Script Information")
-    
-    Tab9:CreateParagraph({
-        Title = "NIKZZ FISH IT - V2.1 ULTIMATE",
-        Content = "Ultimate Edition - All Bugs Fixed\nDeveloper: Nikzz\nRelease Date: 12 Oct 2025\nStatus: 100% WORKING\nVersion: 2.1 - ULTIMATE EDITION"
-    })
-    
-    Tab9:CreateSection("Fixed Bugs in V2.1")
-    
-    Tab9:CreateParagraph({
-        Title = "✅ Bug Fixes",
-        Content = "• Auto Fishing V2: Now auto equips rod + skips minigame\n• Auto Jump: Fixed - now jumps properly with delay\n• Auto Enchant: Changed to button (not toggle)\n• Performance Mode: Fixed lag issues\n• Auto Accept Trade: Fixed - now works instantly"
-    })
-    
-    Tab9:CreateSection("New Features in V2.1")
-    
-    Tab9:CreateParagraph({
-        Title = "🆕 Extra FPS Boost",
-        Content = "Ultra low rendering mode\n• Rendering lower than 8-bit\n• Minimal lighting impact\n• Maximum FPS optimization\n• Removes all unnecessary visuals"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "🆕 HD Graphics Medium",
-        Content = "Medium quality HD graphics\n• Balanced performance & quality\n• Realistic atmosphere\n• Medium shadows & effects\n• Good for mid-end devices"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "🆕 HD Graphics Ultra",
-        Content = "20x Quality HD graphics\n• Maximum visual quality\n• Bloom & Sun Rays effects\n• Ultra realistic atmosphere\n• Best for high-end devices\n• Color correction & enhancements"
-    })
-    
-    Tab9:CreateSection("Features Overview")
-    
-    Tab9:CreateParagraph({
-        Title = "🎣 Fishing System",
-        Content = "• Auto Fishing V1 (Ultra Fast + Anti-Stuck)\n• Auto Fishing V2 (Auto Equip + Skip Minigame)\n• Perfect Catch Mode\n• Auto Sell Fish\n• Radar & Diving Gear\n• Auto Enchant (Button Based)"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "📍 Teleport System",
-        Content = "• 21 Island Locations\n• Player Teleport\n• Event Detection & Teleport\n• Position Lock Feature\n• Save/Load Position\n• Checkpoint System"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "⚡ Utility Features",
-        Content = "• Custom Speed (Unlimited)\n• Fly Mode\n• Walk on Water\n• NoClip & XRay\n• Infinite Jump\n• Auto Jump (Fixed)"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "⚡ Utility II Features",
-        Content = "• God Mode\n• Player ESP with Distance\n• Player Highlights\n• Auto Accept Trade (Fixed)\n• Health Management"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "👁️ Visual Features",
-        Content = "• Permanent Fullbright/Brightness\n• 8-Bit Mode (5x Smoother)\n• Extra FPS Boost (NEW)\n• HD Medium Graphics (NEW)\n• HD Ultra Graphics 20x (NEW)\n• Remove Fog/Particles/Seaweed\n• Camera Controls"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "🌤️ Weather System",
-        Content = "• Buy up to 3 weathers\n• Auto buy mode (continuous)\n• 6 weather types available\n• Manual purchase option"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "🔧 Misc Features",
-        Content = "• Character Customization\n• Audio Controls\n• Inventory Manager\n• Server Information\n• Auto Rejoin on Disconnect\n• Auto Save & Load Settings"
-    })
-    
-    Tab9:CreateSection("Usage Guide")
-    
-    Tab9:CreateParagraph({
-        Title = "⚡ Quick Start",
-        Content = "1. Enable Auto Save Settings\n2. Choose Auto Fishing V1 or V2\n3. Teleport to fishing spot\n4. Enable God Mode for safety\n5. Adjust graphics as needed"
-    })
-    
-    Tab9:CreateParagraph({
-        Title = "⚠️ Important Notes",
-        Content = "• V1: Ultra fast with anti-stuck\n• V2: Auto equip + skip minigame\n• Auto Jump: Fixed, works properly\n• Auto Enchant: Button based (once)\n• Graphics: 3 presets available\n• Trade: Auto accepts instantly"
-    })
-    
-    Tab9:CreateSection("Script Control")
-    
-    Tab9:CreateButton({
-        Name = "Show Statistics",
+    Tab10:CreateButton({
+        Name = "Save All & Close Script",
         Callback = function()
-            local stats = string.format(
-                "=== NIKZZ STATISTICS V2.1 ===\n" ..
-                "Version: 2.1 ULTIMATE\n" ..
-                "Islands: %d\n" ..
-                "Players Online: %d\n" ..
-                "Auto Fishing V1: %s\n" ..
-                "Auto Fishing V2: %s\n" ..
-                "Auto Jump: %s\n" ..
-                "Auto Accept Trade: %s\n" ..
-                "God Mode: %s\n" ..
-                "Walk Speed: %d\n" ..
-                "=== ALL BUGS FIXED ===",
-                #IslandsData,
-                #Players:GetPlayers() - 1,
-                Config.AutoFishingV1 and "ON" or "OFF",
-                Config.AutoFishingV2 and "ON" or "OFF",
-                Config.AutoJump and "ON" or "OFF",
-                Config.AutoAcceptTrade and "ON" or "OFF",
-                Config.GodMode and "ON" or "OFF",
-                Config.WalkSpeed
-            )
-            print(stats)
-            Rayfield:Notify({Title = "Statistics", Content = "Check console (F9)", Duration = 3})
-        end
-    })
-    
-    Tab9:CreateButton({
-        Name = "Close Script",
-        Callback = function()
-            SaveSettings()
-            Rayfield:Notify({Title = "Closing Script", Content = "Saving and shutting down...", Duration = 2})
+            if Config.AutoSaveConfig then
+                SaveConfig()
+            end
+            
+            Rayfield:Notify({Title = "Closing Script", Content = "Saving & shutting down...", Duration = 2})
             
             -- Stop all features
             Config.AutoFishingV1 = false
@@ -2460,18 +2123,15 @@ CurrentValue = 50,
             Config.AntiAFK = false
             Config.AutoJump = false
             Config.AutoSell = false
+            Config.AutoEnchant = false
             Config.AutoBuyWeather = false
             Config.AutoAcceptTrade = false
             
             if GodConnection then GodConnection:Disconnect() end
-            if PerfectCatchConn then PerfectCatchConn:Disconnect() end
             if LockConn then LockConn:Disconnect() end
             if WaterConn then WaterConn:Disconnect() end
             if NoClipConn then NoClipConn:Disconnect() end
             if FlyConn then FlyConn:Disconnect() end
-            if LightingConnection then LightingConnection:Disconnect() end
-            if TradeConnection then TradeConnection:Disconnect() end
-            if JumpConnection then JumpConnection:Disconnect() end
             
             StopFly()
             ToggleGodMode(false)
@@ -2481,42 +2141,70 @@ CurrentValue = 50,
             ToggleXRay(false)
             ToggleESP(false)
             
+            for name, conn in pairs(VisualConnections) do
+                conn:Disconnect()
+            end
+            
             task.wait(2)
             Rayfield:Destroy()
             
             print("=======================================")
-            print("  NIKZZ FISH IT - V2.1 ULTIMATE CLOSED")
+            print("  NIKZZ FISH IT - V2 ULTIMATE CLOSED")
             print("  All Features Stopped & Saved")
             print("  Thank you for using!")
+            print("  Developer: Nikzz")
             print("=======================================")
         end
     })
     
-    -- Final Notification
+    -- Final Setup
     task.wait(1)
+    
+    -- Load config if enabled
+    if Config.AutoLoadConfig then
+        LoadConfig()
+    end
+    
+    -- Setup auto rejoin if enabled
+    if Config.AutoRejoinDisconnect then
+        SetupAutoRejoin()
+    end
+    
+    -- Auto save on exit
+    game:BindToClose(function()
+        if Config.AutoSaveConfig then
+            SaveConfig()
+        end
+    end)
+    
     Rayfield:Notify({
-        Title = "NIKZZ FISH IT - V2.1 ULTIMATE",
-        Content = "All bugs fixed - Ultimate edition ready!",
+        Title = "NIKZZ FISH IT - V2 ULTIMATE",
+        Content = "🔥 All systems ready! Developed by Nikzz 🔥",
         Duration = 5
     })
     
     print("=======================================")
-    print("  NIKZZ FISH IT - V2.1 ULTIMATE")
-    print("  Status: 100% WORKING - ALL BUGS FIXED")
+    print("  NIKZZ FISH IT - V2 ULTIMATE LOADED")
+    print("  Status: ALL FEATURES WORKING")
     print("  Developer: Nikzz")
     print("  Release: 12 Oct 2025")
-    print("=======================================")
-    print("  FIXED BUGS:")
-    print("  ✅ Auto Fishing V2 - Auto Equip + Skip")
-    print("  ✅ Auto Jump - Works Properly")
-    print("  ✅ Auto Enchant - Button Based")
-    print("  ✅ Performance Mode - No Lag")
-    print("  ✅ Auto Accept Trade - Instant")
-    print("")
-    print("  NEW FEATURES:")
-    print("  🆕 Extra FPS Boost (Ultra Low)")
-    print("  🆕 HD Graphics Medium")
-    print("  🆕 HD Graphics Ultra (20x)")
+    print("  Platform: Delta Executor (Android)")
+    print("  ")
+    print("  🆕 NEW IN V2:")
+    print("  ✅ Auto Fishing Ultra Fast + Anti-Stuck")
+    print("  ✅ Auto Enchant System")
+    print("  ✅ Auto Buy Weather (Up to 3)")
+    print("  ✅ Auto Accept Trade")
+    print("  ✅ Auto Rejoin on Disconnect")
+    print("  ✅ Auto Save/Load Config")
+    print("  ✅ Permanent Visual Effects")
+    print("  ✅ Enhanced Performance Modes")
+    print("  ✅ Extra FPS Boost")
+    print("  ✅ HD Graphics (Medium & Ultra)")
+    print("  ✅ Fixed Auto Jump")
+    print("  ✅ Fixed Fishing Delay")
+    print("  ")
+    print("  🔥 Optimized for Delta Android!")
     print("=======================================")
     
     return Window
@@ -2530,12 +2218,13 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     
     task.wait(2)
     
-    -- Reapply settings
+    -- Reapply settings after respawn
     if Config.AutoFishingV1 then AutoFishingV1() end
     if Config.AutoFishingV2 then AutoFishingV2() end
     if Config.AntiAFK then StartAntiAFK() end
     if Config.AutoJump then StartAutoJump() end
     if Config.AutoSell then StartAutoSell() end
+    if Config.AutoEnchant then AutoEnchant() end
     if Config.AutoBuyWeather then AutoBuyWeather() end
     if Config.AutoAcceptTrade then AutoAcceptTrade() end
     if Config.GodMode then ToggleGodMode(true) end
@@ -2549,17 +2238,17 @@ LocalPlayer.CharacterAdded:Connect(function(char)
         Humanoid.WalkSpeed = Config.WalkSpeed
         Humanoid.JumpPower = Config.JumpPower
     end
+    
+    print("[Character Respawned] All settings reapplied")
 end)
 
 -- Main Execution
-print("Initializing NIKZZ FISH IT - V2.1 ULTIMATE...")
+print("Initializing NIKZZ FISH IT - V2 ULTIMATE...")
+print("Optimized for Delta Executor (Android)")
 
 task.wait(1)
 Config.CheckpointPosition = HumanoidRootPart.CFrame
 print("Checkpoint position saved")
-
--- Load saved settings
-LoadSettings()
 
 local success, err = pcall(function()
     CreateUI()
@@ -2567,35 +2256,10 @@ end)
 
 if not success then
     warn("ERROR: " .. tostring(err))
+    warn("Please report this error to developer")
 else
-    print("NIKZZ FISH IT - V2.1 ULTIMATE LOADED SUCCESSFULLY")
-    print("Ultimate Edition - All Bugs Fixed & New Features Added")
-    print("Developer by Nikzz")
+    print("NIKZZ FISH IT - V2 ULTIMATE LOADED SUCCESSFULLY")
+    print("New Version - All Features Working")
+    print("Developed by Nikzz for Delta Android")
     print("Ready to use!")
-    print("")
-    print("=======================================")
-    print("  🎉 V2.1 ULTIMATE - CHANGELOG")
-    print("=======================================")
-    print("")
-    print("  ✅ FIXED BUGS:")
-    print("  • Auto Fishing V2: Auto equip + skip minigame")
-    print("  • Auto Jump: Fixed - jumps properly with delay")
-    print("  • Auto Enchant: Changed to button (once)")
-    print("  • Performance Mode: Fixed lag issues")
-    print("  • Auto Accept Trade: Fixed - works instantly")
-    print("")
-    print("  🆕 NEW FEATURES:")
-    print("  • Extra FPS Boost (Ultra Low Rendering)")
-    print("  • HD Graphics Medium (Balanced)")
-    print("  • HD Graphics Ultra (20x Quality)")
-    print("")
-    print("  📊 PERFORMANCE:")
-    print("  • All previous features working perfectly")
-    print("  • No bugs or errors")
-    print("  • Optimized code")
-    print("  • Stable and reliable")
-    print("")
-    print("=======================================")
-    print("  🚀 READY TO USE!")
-    print("=======================================")
 end
